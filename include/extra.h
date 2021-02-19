@@ -228,12 +228,30 @@ namespace xtr {
 
 namespace detail {
 
+template <typename, typename = void>
+struct get_index_type {
+	using type = ::std::size_t;
+};
+
+template <typename T>
+struct get_index_type<T, ::std::void_t<typename T::size_type>> {
+	using type = typename T::size_type;
+};
+
+template <typename T>
+using get_index_type_t = typename get_index_type<T>::type;
+
+
+template <typename T>
+using get_iterable_type_t = ::std::conditional_t<::std::is_rvalue_reference_v<T>, ::std::remove_reference_t<T>, T>;
+
+
 template <typename Iterable>
 struct enumerator_base {
 
 	using iterable_type = Iterable;
 
-	iterable_type m_iterable;
+	get_iterable_type_t<iterable_type> m_iterable;
 
 	XTR_CONSTEXPR enumerator_base(iterable_type iterable)
 		noexcept(::std::conditional_t<::std::is_reference_v<iterable_type>,
@@ -323,32 +341,14 @@ XTR_CONSTEXPR auto end(enumerator<Iterable, Index> &object)
 	return end(object.m_iterable);
 }
 
-
-template <typename, typename = void>
-struct get_index_type {
-	using type = ::std::size_t;
-};
-
-template <typename T>
-struct get_index_type<T, ::std::void_t<typename T::size_type>> {
-	using type = typename T::size_type;
-};
-
-template <typename T>
-using get_index_type_t = typename get_index_type<T>::type;
-
-
-template <typename T>
-using get_iterable_type_t = ::std::conditional_t<::std::is_rvalue_reference_v<T>, ::std::remove_reference_t<T>, T>;
-
 } // namespace detail
 
 template <typename Iterable,
 	typename Index = detail::get_index_type_t<::std::remove_reference_t<Iterable>>>
-XTR_NODISCARD XTR_CONSTEXPR detail::enumerator<detail::get_iterable_type_t<Iterable>, Index>
+XTR_NODISCARD XTR_CONSTEXPR detail::enumerator<::std::add_rvalue_reference_t<Iterable>, Index>
 enumerate(Iterable &&iterable)
 	noexcept(::std::is_nothrow_constructible_v<
-		detail::enumerator<detail::get_iterable_type_t<Iterable>, Index>,
+		detail::enumerator<::std::add_rvalue_reference_t<Iterable>, Index>,
 		::std::add_rvalue_reference_t<Iterable>>) {
 	return {::std::forward<Iterable>(iterable)};
 }
