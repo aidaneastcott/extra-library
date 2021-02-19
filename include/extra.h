@@ -264,8 +264,7 @@ struct enumerator_base {
 template <typename Iterable, typename Index>
 struct enumerator : enumerator_base<Iterable> {
 
-	using enumerator_base = enumerator_base<Iterable>;
-	using iterable_type = typename enumerator_base::iterable_type;
+	using iterable_type = typename enumerator_base<Iterable>::iterable_type;
 	using index_type = Index;
 
 	static_assert(::std::negation_v<::std::is_reference<index_type>>, "index_type must not be a reference");
@@ -273,22 +272,22 @@ struct enumerator : enumerator_base<Iterable> {
 
 	using is_constructor_noexcept =
 		::std::is_nothrow_constructible<
-		enumerator_base, ::std::add_rvalue_reference_t<iterable_type>>;
+		enumerator_base<Iterable>, ::std::add_rvalue_reference_t<iterable_type>>;
 
 	XTR_CONSTEXPR enumerator(iterable_type iterable)
 		noexcept(is_constructor_noexcept::value) :
-		enumerator_base{::std::forward<iterable_type>(iterable)} {}
+		enumerator_base<Iterable>{::std::forward<iterable_type>(iterable)} {}
 
 
 	template <typename ...Parameters>
 	using is_variadic_constructor_noexcept =
 		::std::is_nothrow_constructible<
-		enumerator_base, ::std::add_rvalue_reference_t<Parameters>...>;
+		enumerator_base<Iterable>, ::std::add_rvalue_reference_t<Parameters>...>;
 
 	template <typename ...Parameters>
 	XTR_CONSTEXPR enumerator(Parameters &&...parameters)
 		noexcept(is_variadic_constructor_noexcept<Parameters...>::value) :
-		enumerator_base{::std::forward<Parameters>(parameters)...} {}
+		enumerator_base<Iterable>{::std::forward<Parameters>(parameters)...} {}
 };
 
 template <typename Iterator>
@@ -328,8 +327,7 @@ struct indexed_iterator_base {
 template <typename Iterator, typename Index>
 struct indexed_iterator : indexed_iterator_base<Iterator> {
 
-	using indexed_iterator_base = indexed_iterator_base<Iterator>;
-	using iterator_type = typename indexed_iterator_base::iterator_type;
+	using iterator_type = typename indexed_iterator_base<Iterator>::iterator_type;
 	using index_type = Index;
 
 	static_assert(::std::negation_v<::std::is_reference<index_type>>, "index_type must not be a reference");
@@ -340,11 +338,11 @@ struct indexed_iterator : indexed_iterator_base<Iterator> {
 	using is_constructor_noexcept =
 		::std::conjunction<
 		::std::is_nothrow_default_constructible<index_type>,
-		::std::is_nothrow_constructible<indexed_iterator_base, ::std::add_rvalue_reference_t<iterator_type>>>;
+		::std::is_nothrow_constructible<indexed_iterator_base<Iterator>, ::std::add_rvalue_reference_t<iterator_type>>>;
 
 	XTR_CONSTEXPR indexed_iterator(iterator_type iterator)
 		noexcept(is_constructor_noexcept::value) :
-		indexed_iterator_base{::std::forward<iterator_type>(iterator)},
+		indexed_iterator_base<Iterator>{::std::forward<iterator_type>(iterator)},
 		m_index{} {}
 
 
@@ -355,7 +353,7 @@ struct indexed_iterator : indexed_iterator_base<Iterator> {
 
 	XTR_CONSTEXPR void operator++()
 		noexcept(is_increment_noexcept::value) {
-		++indexed_iterator_base::m_iterator;
+		++indexed_iterator_base<Iterator>::m_iterator;
 		++m_index;
 	}
 
@@ -372,7 +370,7 @@ struct indexed_iterator : indexed_iterator_base<Iterator> {
 
 	XTR_CONSTEXPR dereference_result_type operator*()
 		noexcept(is_dereference_noexcept::value) {
-		return {m_index, *indexed_iterator_base::m_iterator};
+		return {m_index, *indexed_iterator_base<Iterator>::m_iterator};
 	}
 };
 
