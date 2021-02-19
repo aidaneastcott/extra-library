@@ -29,6 +29,11 @@ auto make_vec = []() { return std::vector{20, 40, 60, 80}; };
 for (auto &&[index, value] : xtr::enumerate(make_vec())) {
   // Access index and value for each element in the vector
 }
+
+// Construct the container in place using the variadic overload
+for (auto &&[index, value] : xtr::enumerate<std::vector<int>>(20, 40, 60, 80)) {
+  // Access index and value for each element in the vector
+}
 ```
 
 The value in the range-based for loop is a `std::tuple` storing 2 values, the index and element value respectively. If the container has a member type `size_type`, then the index is a const qualified value of that type. Otherwise, the index is a const qualified `std::size_t`. The type of the element value is the same as in a regular range-based for loop.
