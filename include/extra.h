@@ -2,7 +2,7 @@
 	File:           extra.h
 	Project:        Extra Library
 	Programmer:     Aidan Eastcott
-	Last Update:    2021-02-18
+	Last Update:    2021-02-19
 	Description:
 		A header-only library containing miscellaneous utility macros, functions, and types for C and C++
 
@@ -20,7 +20,7 @@
 
 
 // Extra library version
-#define XTR_VERSION 2021'02'18
+#define XTR_VERSION 2021'02'19
 
 
 // Enable extra functionality
