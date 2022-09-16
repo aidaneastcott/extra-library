@@ -46,12 +46,24 @@ A type alias to `std::array` for a more readable multidimensional array syntax.
 int arr1[5][10] = { 0 };
 
 // 2D array using std::array without type alias
-std::array<std::array<int, 10>, 5> arr2{};
+std::array<std::array<int, 10>, 5> arr2;
 
 // 2D array using std::array with xtr::multiarray alias
-xtr::multiarray<int, 5, 10> arr3{};
+xtr::multiarray<int, 5, 10> arr3;
 
 static_assert(std::is_same_v<decltype(arr2), decltype(arr3)>);
+```
+
+### xtr::is_aligned
+A helper function for checking the alignment of memory addresses
+```cpp
+char val = 65;
+
+// Always true
+assert(xtr::is_aligned<char>(&val));
+
+// Maybe not true
+assert(xtr::is_aligned<int>(&val));
 ```
 
 ### Macros for debug logging
@@ -59,7 +71,7 @@ static_assert(std::is_same_v<decltype(arr2), decltype(arr3)>);
 
 ### Macros for compiler optimization hints
 - Macro function `assume` tells the compiler to assume an expression will always be true
-- Macro function `assert_assume` combines `assume` behaviour with an assertation in debug mode
+- Macro function `assert_assume` combines `assume` behavior with an assertion in debug mode
 - Macro functions `likely` and `unlikely` hint to the compiler the likelihood of an expression being true
 - Macro `restrict` enables the C language restrict keyword in C++
 

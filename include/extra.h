@@ -1,17 +1,17 @@
 /*
-	File:           extra.h
-	Project:        Extra Library
-	Programmer:     Aidan Eastcott
-	Last Update:    2021-02-19
-	Description:
-		A header-only library containing miscellaneous utility macros, functions, and types for C and C++
+    Project:        Extra Library
+    Author:         Aidan Eastcott
+    Last Update:    2022-09-16
+    Description:
+        A header-only library containing miscellaneous utility macros, functions, and types
 
-	Macro Options:
-		XTR_MINIMAL          Disables all functionality except macro definitions
-		XTR_LOGGING          Enables debug_log function
-		XTR_MULTIARRAY       Enables xtr::multiarray type in C++
-		XTR_ENUMERATE        Enables xtr::enumerate function in C++
-		XTR_NO_CONSTEXPR     Disables use of constexpr specifier in C++
+    Macro Options:
+        XTR_MINIMAL          Disables all functionality except macro definitions
+        XTR_LOGGING          Enables debug_log function
+        XTR_ALIGNED          Enables xtr::is_aligned function in C++
+        XTR_MULTIARRAY       Enables xtr::multiarray type in C++
+        XTR_ENUMERATE        Enables xtr::enumerate function in C++
+        XTR_NO_CONSTEXPR     Disables use of constexpr specifier in C++
 */
 
 #pragma once
@@ -19,13 +19,10 @@
 #define EXTRA_H
 
 
-// Extra library version
-#define XTR_VERSION 2021'02'19
-
-
-// Enable extra functionality
+// Enable extra features
 #if !defined(XTR_MINIMAL)
 #define XTR_LOGGING
+#define XTR_ALIGNED
 #define XTR_MULTIARRAY
 #define XTR_ENUMERATE
 #endif
@@ -37,33 +34,50 @@
 #include <cstddef>
 #else
 #include <assert.h>
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
 #endif
 
 
 // Logging headers
 #if defined(XTR_LOGGING)
+
 #if defined(__cplusplus)
 #include <cstdio>
 #else
 #include <stdio.h>
 #endif
+
+#endif
+
+
+#if defined(__cplusplus)
+
+// Shared headers
+#if defined(XTR_ALIGNED)
+#include <cstdint>
 #endif
 
 
 // Multiarray headers
-#if defined(XTR_MULTIARRAY) && defined(__cplusplus)
+#if defined(XTR_MULTIARRAY)
 #include <array>
 #endif
 
 
 // Enumerate headers
-#if defined(XTR_ENUMERATE) && defined(__cplusplus)
-#include <type_traits>
-#include <tuple>
+#if defined(XTR_ENUMERATE)
 #include <iterator>
+#include <tuple>
 #include <utility>
+#endif
+
+
+// Shared headers
+#if defined(XTR_ALIGNED) || defined(XTR_ENUMERATE)
+#include <type_traits>
+#endif
+
 #endif
 
 
@@ -113,10 +127,14 @@ namespace xtr {}
 #endif
 
 
+// Null-op
+#define XTR_NO_OP XTR_CAST_VOID(0)
+
+
 // Macros for meta string literal conversion
 #if !defined(concat_string) && !defined(literal_string) && !defined(macro_string)
 
-#define concat_string(string1, string2) string1 ## string2
+#define concat_string(string1, string2) string1##string2
 #define literal_string(macro) #macro
 #define macro_string(macro) literal_string(macro)
 
@@ -129,9 +147,9 @@ namespace xtr {}
 #if defined(XTR_COMPILER_MSVC)
 #define assume(expression) __assume(!!(expression))
 #elif defined(XTR_COMPILER_GNUC)
-#define assume(expression) XTR_CAST_VOID(!!(expression) ? XTR_CAST_VOID(0) : __builtin_unreachable())
+#define assume(expression) XTR_CAST_VOID(!!(expression) ? XTR_NO_OP : __builtin_unreachable())
 #else
-#define assume(expression) XTR_CAST_VOID(0)
+#define assume(expression) XTR_NO_OP
 #endif
 
 #endif // assume
@@ -141,7 +159,11 @@ namespace xtr {}
 #if !defined(assert_assume)
 
 #if defined(NDEBUG)
-#define assert_assume(expression) do { assert(expression); assume(expression); } while(0)
+#define assert_assume(expression) \
+	do {                          \
+		assert(expression);       \
+		assume(expression);       \
+	} while (0)
 #else
 #define assert_assume(expression) assume(expression)
 #endif
@@ -156,8 +178,8 @@ namespace xtr {}
 #define likely(expression) XTR_CAST_VOID(__builtin_expect(!!(expression), 1))
 #define unlikely(expression) XTR_CAST_VOID(__builtin_expect(!!(expression), 0))
 #else
-#define likely(expression) XTR_CAST_VOID(0)
-#define unlikely(expression) XTR_CAST_VOID(0)
+#define likely(expression) XTR_NO_OP
+#define unlikely(expression) XTR_NO_OP
 #endif
 
 #endif // likely, unlikely
@@ -167,7 +189,7 @@ namespace xtr {}
 #if !defined(restrict) && defined(__cplusplus)
 
 #if defined(XTR_COMPILER_MSVC)
-#define restrict  __restrict
+#define restrict __restrict
 #elif defined(XTR_COMPILER_GNUC)
 #define restrict __restrict__
 #else
@@ -183,14 +205,43 @@ namespace xtr {}
 #if !defined(debug_log)
 
 #if defined(NDEBUG)
-#define debug_log(message) XTR_CAST_VOID(0)
+#define debug_log(message) XTR_NO_OP
 #else
-#define debug_log(message) XTR_NAMESPACE_STD puts("Debug message: " message ", file " __FILE__ ", line " macro_string(__LINE__) "\n")
+#define debug_log(message)                                              \
+	XTR_NAMESPACE_STD puts("Debug message: " message ", file " __FILE__ \
+	                       ", line " macro_string(__LINE__) "\n")
 #endif
 
 #endif // debug_log
 
 #endif // XTR_LOGGING
+
+
+// Memory alignment check in C++
+#if defined(XTR_ALIGNED) && defined(__cplusplus)
+
+namespace xtr {
+
+XTR_NODISCARD bool is_aligned(const void *pointer, ::std::size_t alignment) noexcept {
+	using comparison_type =
+	    typename ::std::conditional<(sizeof(::std::uintptr_t) > sizeof(::std::size_t)),
+	                                ::std::uintptr_t, ::std::size_t>::type;
+	const auto pointer_value = reinterpret_cast<::std::uintptr_t>(pointer);
+	const auto result =
+	    static_cast<comparison_type>(pointer_value) % static_cast<comparison_type>(alignment);
+	return result == 0;
+}
+
+template <typename Type>
+XTR_NODISCARD bool is_aligned(const void *pointer) noexcept {
+	static constexpr auto alignment =
+	    alignof(typename ::std::remove_cv<typename ::std::remove_reference<Type>::type>::type);
+	return is_aligned(pointer, alignment);
+}
+
+} // namespace xtr
+
+#endif // XTR_ALIGNED
 
 
 // Multidimensional array alias for std::array in C++
@@ -200,7 +251,7 @@ namespace xtr {
 
 namespace detail {
 
-template <typename Type, ::std::size_t I, ::std::size_t ...J>
+template <typename Type, ::std::size_t I, ::std::size_t... J>
 struct multiarray_base {
 	using nested = typename multiarray_base<Type, J...>::type;
 	using type = ::std::array<nested, I>;
@@ -211,9 +262,9 @@ struct multiarray_base<Type, I> {
 	using type = ::std::array<Type, I>;
 };
 
-} // namespace xtr::detail
+} // namespace detail
 
-template <typename Type, ::std::size_t I, ::std::size_t ...J>
+template <typename Type, ::std::size_t I, ::std::size_t... J>
 using multiarray = typename detail::multiarray_base<Type, I, J...>::type;
 
 } // namespace xtr
@@ -229,7 +280,8 @@ namespace xtr {
 namespace detail {
 
 template <typename T>
-using get_stored_t = ::std::conditional_t<::std::is_rvalue_reference_v<T>, ::std::remove_reference_t<T>, T>;
+using get_stored_t =
+    ::std::conditional_t<::std::is_rvalue_reference_v<T>, ::std::remove_reference_t<T>, T>;
 
 template <typename Iterable>
 struct enumerator_base {
@@ -242,23 +294,22 @@ struct enumerator_base {
 
 
 	using is_constructor_noexcept =
-		::std::conditional_t<::std::is_reference_v<get_stored_t<iterable_type>>,
-		::std::true_type, ::std::is_nothrow_move_constructible<get_stored_t<iterable_type>>>;
+	    ::std::conditional_t<::std::is_reference_v<get_stored_t<iterable_type>>, ::std::true_type,
+	                         ::std::is_nothrow_move_constructible<get_stored_t<iterable_type>>>;
 
-	XTR_CONSTEXPR enumerator_base(iterable_type iterable)
-		noexcept(is_constructor_noexcept::value) :
-		m_iterable{::std::forward<iterable_type>(iterable)} {}
+	XTR_CONSTEXPR enumerator_base(iterable_type iterable) noexcept(is_constructor_noexcept::value) :
+	    m_iterable{::std::forward<iterable_type>(iterable)} {}
 
 
-	template <typename ...Parameters>
+	template <typename... Parameters>
 	using is_variadic_constructor_noexcept =
-		::std::is_nothrow_constructible<
-		get_stored_t<iterable_type>, ::std::add_rvalue_reference_t<Parameters>...>;
+	    ::std::is_nothrow_constructible<get_stored_t<iterable_type>,
+	                                    ::std::add_rvalue_reference_t<Parameters>...>;
 
-	template <typename ...Parameters>
-	XTR_CONSTEXPR enumerator_base(Parameters &&...parameters)
-		noexcept(is_variadic_constructor_noexcept<Parameters...>::value) :
-		m_iterable{::std::forward<Parameters>(parameters)...} {}
+	template <typename... Parameters>
+	XTR_CONSTEXPR enumerator_base(Parameters &&...parameters) noexcept(
+	    is_variadic_constructor_noexcept<Parameters...>::value) :
+	    m_iterable{::std::forward<Parameters>(parameters)...} {}
 };
 
 template <typename Iterable, typename Index>
@@ -267,27 +318,27 @@ struct enumerator : enumerator_base<Iterable> {
 	using iterable_type = typename enumerator_base<Iterable>::iterable_type;
 	using index_type = Index;
 
-	static_assert(::std::negation_v<::std::is_reference<index_type>>, "index_type must not be a reference");
+	static_assert(::std::negation_v<::std::is_reference<index_type>>,
+	              "index_type must not be a reference");
 
 
 	using is_constructor_noexcept =
-		::std::is_nothrow_constructible<
-		enumerator_base<Iterable>, ::std::add_rvalue_reference_t<iterable_type>>;
+	    ::std::is_nothrow_constructible<enumerator_base<Iterable>,
+	                                    ::std::add_rvalue_reference_t<iterable_type>>;
 
-	XTR_CONSTEXPR enumerator(iterable_type iterable)
-		noexcept(is_constructor_noexcept::value) :
-		enumerator_base<Iterable>{::std::forward<iterable_type>(iterable)} {}
+	XTR_CONSTEXPR enumerator(iterable_type iterable) noexcept(is_constructor_noexcept::value) :
+	    enumerator_base<Iterable>{::std::forward<iterable_type>(iterable)} {}
 
 
-	template <typename ...Parameters>
+	template <typename... Parameters>
 	using is_variadic_constructor_noexcept =
-		::std::is_nothrow_constructible<
-		enumerator_base<Iterable>, ::std::add_rvalue_reference_t<Parameters>...>;
+	    ::std::is_nothrow_constructible<enumerator_base<Iterable>,
+	                                    ::std::add_rvalue_reference_t<Parameters>...>;
 
-	template <typename ...Parameters>
-	XTR_CONSTEXPR enumerator(Parameters &&...parameters)
-		noexcept(is_variadic_constructor_noexcept<Parameters...>::value) :
-		enumerator_base<Iterable>{::std::forward<Parameters>(parameters)...} {}
+	template <typename... Parameters>
+	XTR_CONSTEXPR enumerator(Parameters &&...parameters) noexcept(
+	    is_variadic_constructor_noexcept<Parameters...>::value) :
+	    enumerator_base<Iterable>{::std::forward<Parameters>(parameters)...} {}
 };
 
 template <typename Iterator>
@@ -301,25 +352,27 @@ struct indexed_iterator_base {
 
 
 	using is_constructor_noexcept =
-		::std::conditional_t<::std::is_reference_v<get_stored_t<iterator_type>>,
-		::std::true_type, ::std::is_nothrow_move_constructible<get_stored_t<iterator_type>>>;
+	    ::std::conditional_t<::std::is_reference_v<get_stored_t<iterator_type>>, ::std::true_type,
+	                         ::std::is_nothrow_move_constructible<get_stored_t<iterator_type>>>;
 
-	XTR_CONSTEXPR indexed_iterator_base(iterator_type iterator)
-		noexcept(is_constructor_noexcept::value) :
-		m_iterator{::std::forward<iterator_type>(iterator)} {}
+	XTR_CONSTEXPR
+	indexed_iterator_base(iterator_type iterator) noexcept(is_constructor_noexcept::value) :
+	    m_iterator{::std::forward<iterator_type>(iterator)} {}
 
 
 	template <typename EndIterator>
 	using compare_result_type =
-		decltype(::std::declval<::std::add_lvalue_reference_t<iterator_type>>() != ::std::declval<EndIterator>());
+	    decltype(::std::declval<::std::add_lvalue_reference_t<iterator_type>>()
+	             != ::std::declval<EndIterator>());
 
 	template <typename EndIterator>
 	using is_compare_noexcept =
-		::std::bool_constant<noexcept(::std::declval<::std::add_lvalue_reference_t<iterator_type>>() != ::std::declval<EndIterator>())>;
+	    ::std::bool_constant<noexcept(::std::declval<::std::add_lvalue_reference_t<iterator_type>>()
+	                                  != ::std::declval<EndIterator>())>;
 
 	template <typename EndIterator>
 	XTR_CONSTEXPR compare_result_type<EndIterator> operator!=(EndIterator &&end) const
-		noexcept(is_compare_noexcept<EndIterator>::value) {
+	    noexcept(is_compare_noexcept<EndIterator>::value) {
 		return m_iterator != ::std::forward<EndIterator>(end);
 	}
 };
@@ -330,46 +383,46 @@ struct indexed_iterator : indexed_iterator_base<Iterator> {
 	using iterator_type = typename indexed_iterator_base<Iterator>::iterator_type;
 	using index_type = Index;
 
-	static_assert(::std::negation_v<::std::is_reference<index_type>>, "index_type must not be a reference");
+	static_assert(::std::negation_v<::std::is_reference<index_type>>,
+	              "index_type must not be a reference");
 
 	index_type m_index;
 
 
-	using is_constructor_noexcept =
-		::std::conjunction<
-		::std::is_nothrow_default_constructible<index_type>,
-		::std::is_nothrow_constructible<indexed_iterator_base<Iterator>, ::std::add_rvalue_reference_t<iterator_type>>>;
+	using is_constructor_noexcept = ::std::conjunction<
+	    ::std::is_nothrow_default_constructible<index_type>,
+	    ::std::is_nothrow_constructible<indexed_iterator_base<Iterator>,
+	                                    ::std::add_rvalue_reference_t<iterator_type>>>;
 
-	XTR_CONSTEXPR indexed_iterator(iterator_type iterator)
-		noexcept(is_constructor_noexcept::value) :
-		indexed_iterator_base<Iterator>{::std::forward<iterator_type>(iterator)},
-		m_index{} {}
+	XTR_CONSTEXPR
+	indexed_iterator(iterator_type iterator) noexcept(is_constructor_noexcept::value) :
+	    indexed_iterator_base<Iterator>{::std::forward<iterator_type>(iterator)}, m_index{} {}
 
 
 	using is_increment_noexcept =
-		::std::conjunction<
-		::std::bool_constant<noexcept(++::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>,
-		::std::bool_constant<noexcept(++::std::declval<::std::add_lvalue_reference_t<index_type>>())>>;
+	    ::std::conjunction<::std::bool_constant<noexcept(
+	                           ++::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>,
+	                       ::std::bool_constant<noexcept(
+	                           ++::std::declval<::std::add_lvalue_reference_t<index_type>>())>>;
 
-	XTR_CONSTEXPR void operator++()
-		noexcept(is_increment_noexcept::value) {
+	XTR_CONSTEXPR void operator++() noexcept(is_increment_noexcept::value) {
 		++indexed_iterator_base<Iterator>::m_iterator;
 		++m_index;
 	}
 
 
 	using dereference_result_type =
-		::std::tuple<::std::add_const_t<index_type>,
-		decltype(*::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>;
+	    ::std::tuple<::std::add_const_t<index_type>,
+	                 decltype(*::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>;
 
-	using is_dereference_noexcept =
-		::std::conjunction<
-		::std::bool_constant<noexcept(*::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>,
-		::std::is_nothrow_constructible<dereference_result_type, index_type,
-		decltype(*::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>>;
+	using is_dereference_noexcept = ::std::conjunction<
+	    ::std::bool_constant<noexcept(
+	        *::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>,
+	    ::std::is_nothrow_constructible<
+	        dereference_result_type, index_type,
+	        decltype(*::std::declval<::std::add_lvalue_reference_t<iterator_type>>())>>;
 
-	XTR_CONSTEXPR dereference_result_type operator*()
-		noexcept(is_dereference_noexcept::value) {
+	XTR_CONSTEXPR dereference_result_type operator*() noexcept(is_dereference_noexcept::value) {
 		return {m_index, *indexed_iterator_base<Iterator>::m_iterator};
 	}
 };
@@ -381,36 +434,35 @@ using ::std::end;
 
 template <typename Iterable, typename Index>
 using begin_result_type =
-	indexed_iterator<::std::add_rvalue_reference_t<
-	decltype(begin(::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>, Index>;
+    indexed_iterator<::std::add_rvalue_reference_t<decltype(begin(
+                         ::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>,
+                     Index>;
 
 template <typename Iterable, typename Index>
-using is_begin_noexcept =
-	::std::conjunction<
-	::std::bool_constant<noexcept(begin(::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>,
-	::std::is_nothrow_constructible<begin_result_type<Iterable, Index>,
-	decltype(begin(::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>>;
+using is_begin_noexcept = ::std::conjunction<
+    ::std::bool_constant<noexcept(
+        begin(::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>,
+    ::std::is_nothrow_constructible<
+        begin_result_type<Iterable, Index>,
+        decltype(begin(::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>>;
 
 template <typename Iterable, typename Index>
 XTR_CONSTEXPR begin_result_type<Iterable, Index>
-begin(enumerator<Iterable, Index> &object)
-	noexcept(is_begin_noexcept<Iterable, Index>::value) {
+begin(enumerator<Iterable, Index> &object) noexcept(is_begin_noexcept<Iterable, Index>::value) {
 	return {begin(object.m_iterable)};
 }
 
 
 template <typename Iterable>
-using end_result_type =
-	decltype(end(::std::declval<::std::add_lvalue_reference_t<Iterable>>()));
+using end_result_type = decltype(end(::std::declval<::std::add_lvalue_reference_t<Iterable>>()));
 
 template <typename Iterable>
 using is_end_noexcept =
-	::std::bool_constant<noexcept(end(::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>;
+    ::std::bool_constant<noexcept(end(::std::declval<::std::add_lvalue_reference_t<Iterable>>()))>;
 
 template <typename Iterable>
 XTR_CONSTEXPR end_result_type<Iterable>
-end(enumerator_base<Iterable> &object)
-	noexcept(is_end_noexcept<Iterable>::value) {
+end(enumerator_base<Iterable> &object) noexcept(is_end_noexcept<Iterable>::value) {
 	return end(object.m_iterable);
 }
 
@@ -430,35 +482,33 @@ using get_index_t = typename get_index<Iterable>::type;
 
 
 template <typename Iterable, typename Index>
-using enumerate_result_type =
-enumerator<Iterable, Index>;
+using enumerate_result_type = enumerator<Iterable, Index>;
 
 template <typename Iterable, typename Index>
-using is_enumerate_noexcept =
-	::std::is_nothrow_constructible<
-	enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>,
-	::std::add_rvalue_reference_t<Iterable>>;
+using is_enumerate_noexcept = ::std::is_nothrow_constructible<
+    enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>,
+    ::std::add_rvalue_reference_t<Iterable>>;
 
-template <typename Iterable, typename Index, typename ...Parameters>
-using is_variadic_enumerate_noexcept =
-	::std::is_nothrow_constructible<
-	enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>,
-	::std::add_rvalue_reference_t<Parameters>...>;
+template <typename Iterable, typename Index, typename... Parameters>
+using is_variadic_enumerate_noexcept = ::std::is_nothrow_constructible<
+    enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>,
+    ::std::add_rvalue_reference_t<Parameters>...>;
 
 } // namespace detail
 
 
 template <typename Iterable, typename Index = detail::get_index_t<Iterable>>
-XTR_NODISCARD XTR_CONSTEXPR detail::enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>
-enumerate(Iterable &&iterable)
-	noexcept(detail::is_enumerate_noexcept<Iterable, Index>::value) {
+XTR_NODISCARD
+    XTR_CONSTEXPR detail::enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>
+    enumerate(Iterable &&iterable) noexcept(detail::is_enumerate_noexcept<Iterable, Index>::value) {
 	return {::std::forward<Iterable>(iterable)};
 }
 
-template <typename Iterable, typename Index = detail::get_index_t<Iterable>, typename ...Parameters>
-XTR_NODISCARD XTR_CONSTEXPR detail::enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>
-enumerate(Parameters &&...parameters)
-	noexcept(detail::is_variadic_enumerate_noexcept<Iterable, Index, Parameters...>::value) {
+template <typename Iterable, typename Index = detail::get_index_t<Iterable>, typename... Parameters>
+XTR_NODISCARD
+    XTR_CONSTEXPR detail::enumerate_result_type<::std::add_rvalue_reference_t<Iterable>, Index>
+    enumerate(Parameters &&...parameters) noexcept(
+        detail::is_variadic_enumerate_noexcept<Iterable, Index, Parameters...>::value) {
 	return {::std::forward<Parameters>(parameters)...};
 }
 
